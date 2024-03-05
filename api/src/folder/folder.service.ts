@@ -2,7 +2,7 @@
 https://docs.nestjs.com/providers#services
 */
 
-import { Injectable, InternalServerErrorException, UseGuards } from '@nestjs/common';
+import { Inject, Injectable, InternalServerErrorException, UseGuards } from '@nestjs/common';
 import { Directory } from 'src/schema/directory.schema';
 import { Model } from 'mongoose'
 import { InjectModel } from '@nestjs/mongoose';
@@ -11,10 +11,12 @@ import * as fs from 'fs'
 import * as path from 'path'
 import slugify from 'slugify'
 import { File } from 'src/schema/file.schema';
+import { Cache } from '@nestjs/cache-manager';
 
 @Injectable()
 export class FolderService {
     constructor(
+        @Inject(Cache) private readonly cache: Cache,
         @InjectModel(Directory.name) private directoryModel: Model<Directory>,
         @InjectModel(File.name) private fileModel: Model<File>,
     ) { }
@@ -117,9 +119,7 @@ export class FolderService {
                 success: false,
                 message: "error in getting folder"
             })
-
         }
-
     }
 
     async searchFolderFiles(keyword: any, req: any) {
@@ -149,43 +149,86 @@ export class FolderService {
         }
     }
 
-    async getFilteredFoldersFiles(query:any) {
+    async getFilteredFoldersFiles(query: any) {
         try {
-            const {type} = query
-            console.log(type)
+            const { type } = query
+            
             switch (type) {
                 case 'Folders':
+                    const cacheKey = `file:${type}`
+                    const cachedFolder = await this.cache.get(cacheKey)
+                    if (cachedFolder) {
+                        return {
+                            folders: cachedFolder
+                        }
+                    }
                     const folders = await this.directoryModel.find({})
+                    await this.cache.set(cacheKey, folders, 60 * 60);
                     return {
                         folders
                     }
                     break
 
                 case 'Image & Photos':
-                    
-                    const imageFiles = await this.fileModel.find({ $or:[
-                        {type: 'image/png'},{type:'image/jpeg'}
-                    ]  })
+
+                    const cachedImage = await this.cache.get(`file:${type}`)
+                    if (cachedImage) {
+                        return {
+                            files: cachedImage
+                        }
+                    }
+                    const imageFiles = await this.fileModel.find({
+                        $or: [
+                            { type: 'image/png' }, { type: 'image/jpeg' }
+                        ]
+                    })
+                    await this.cache.set(`file:${type}`, imageFiles, 60 * 60)
                     return {
                         files: imageFiles
                     }
                     break
 
                 case 'Spreadsheet':
+                    const cachedSpredsheet = await this.cache.get(`file:${type}`)
+                    if (cachedSpredsheet) {
+                        return {
+                            files: cachedSpredsheet
+                        }
+                    }
                     const spreadsheetFiles = await this.fileModel.find({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+                    await this.cache.set(`file:${type}`, spreadsheetFiles, 60 * 60)
                     return {
                         files: spreadsheetFiles
                     }
                     break
 
                 case 'Pdf':
+                    const cachedPdf = await this.cache.get(`file:${type}`)
+                    if (cachedPdf) {
+                        return {
+                            files: cachedPdf
+                        }
+                    }
                     const pdfFile = await this.fileModel.find({ type: 'application/pdf' })
+                    await this.cache.set(`file:${type}`, pdfFile, 60 * 60)
                     return {
                         files: pdfFile
                     }
                     break
 
                 case 'Videos':
+                    const cachedVideo = await this.cache.get(`file:${type}`)
+                    if (cachedVideo) {
+                        return {
+                            files: cachedVideo
+                        }
+                    }
+                    const videoFile = await this.fileModel.find({ type: 'video/mp4' })
+                    await this.cache.set(`file:${type}`, videoFile, 60 * 60)
+                    return {
+                        files: videoFile
+                    }
+
                     break
                 case 'Audios':
                     break
@@ -195,7 +238,7 @@ export class FolderService {
                     break
 
             }
-            
+
 
         } catch (error) {
             console.log(error)

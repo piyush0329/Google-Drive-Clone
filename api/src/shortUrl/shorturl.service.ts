@@ -44,18 +44,25 @@ export class ShorturlService {
         try {
 
             const data = await this.shortUrlModel.findOne({shortUrl:shorturl})
-            if(data.expireAt>=(new Date())){
-             data.count = data.count+1
-             await data.save()
-                return {
-                    url: data.url,
-                }
+            if(data){
+                if(data?.expireAt>=(new Date())){
+                    data.count = data.count+1
+                    await data.save()
+                       return {
+                           url: data.url,
+                       }
+                   }else{
+                       return {
+                           success:false,
+                           message:'url expired'
+                       }
+                   }
             }else{
-                return {
-                    
+                return {      
                     success:false,
-                    message:'url expired'
+                    message:'invalid url'
                 }
+
             }
         } catch (error) {
             console.log(error)
